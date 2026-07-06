@@ -5,3 +5,5 @@ venv/
 env/
 processia.db
 .streamlit/secrets.toml
+
+.claude/

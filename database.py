@@ -50,4 +50,39 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS checklist_estado (
+                processo_id INTEGER NOT NULL,
+                item_id TEXT NOT NULL,
+                marcado INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (processo_id, item_id),
+                FOREIGN KEY (processo_id) REFERENCES processos (id)
+            )
+            """
+        )
         conn.commit()
+
+
+def salvar_estado_checklist(processo_id: int, item_id: str, marcado: bool) -> None:
+    """Salva (insere ou atualiza) o estado de um item de checklist para um processo."""
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO checklist_estado (processo_id, item_id, marcado)
+            VALUES (?, ?, ?)
+            ON CONFLICT (processo_id, item_id) DO UPDATE SET marcado = excluded.marcado
+            """,
+            (processo_id, item_id, int(marcado)),
+        )
+        conn.commit()
+
+
+def carregar_estado_checklist(processo_id: int) -> dict:
+    """Carrega o estado dos itens de checklist de um processo como {item_id: marcado}."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT item_id, marcado FROM checklist_estado WHERE processo_id = ?",
+            (processo_id,),
+        ).fetchall()
+    return {row["item_id"]: bool(row["marcado"]) for row in rows}

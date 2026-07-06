@@ -13,6 +13,22 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+def _garantir_colunas_processos(conn: sqlite3.Connection) -> None:
+    """Migração leve: adiciona colunas novas de processos caso ainda não existam."""
+    colunas_existentes = {row["name"] for row in conn.execute("PRAGMA table_info(processos)").fetchall()}
+    colunas_novas = {
+        "valor_estimado": "REAL",
+        "data_fim_vigencia": "TEXT",
+        "unidade_demandante": "TEXT",
+        "objeto": "TEXT",
+        "urgencia": "TEXT",
+        "observacoes": "TEXT",
+    }
+    for coluna, tipo_sql in colunas_novas.items():
+        if coluna not in colunas_existentes:
+            conn.execute(f"ALTER TABLE processos ADD COLUMN {coluna} {tipo_sql}")
+
+
 def init_db() -> None:
     """Cria as tabelas do banco caso ainda não existam."""
     with get_connection() as conn:
@@ -28,6 +44,7 @@ def init_db() -> None:
             )
             """
         )
+        _garantir_colunas_processos(conn)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS analises (
@@ -62,6 +79,47 @@ def init_db() -> None:
             """
         )
         conn.commit()
+
+
+def criar_processo(
+    numero: str,
+    tipo: str,
+    unidade_demandante: str,
+    objeto: str,
+    valor_estimado,
+    data_fim_vigencia,
+    urgencia: str,
+    observacoes: str,
+    status: str = "Aberto",
+) -> int:
+    """Insere um novo processo e retorna o id gerado."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO processos (
+                numero, tipo, status, valor_estimado, data_fim_vigencia,
+                unidade_demandante, objeto, urgencia, observacoes
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (numero, tipo, status, valor_estimado, data_fim_vigencia, unidade_demandante, objeto, urgencia, observacoes),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def listar_processos() -> list:
+    """Retorna todos os processos cadastrados, mais recentes primeiro."""
+    with get_connection() as conn:
+        rows = conn.execute("SELECT * FROM processos ORDER BY criado_em DESC").fetchall()
+    return [dict(row) for row in rows]
+
+
+def buscar_processo(processo_id: int):
+    """Retorna um processo pelo id, ou None se não existir."""
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM processos WHERE id = ?", (processo_id,)).fetchone()
+    return dict(row) if row else None
 
 
 def salvar_estado_checklist(processo_id: int, item_id: str, marcado: bool) -> None:

@@ -3,8 +3,6 @@ import streamlit as st
 from database import init_db, criar_processo
 from checklists import TIPOS_PROCESSO
 
-st.set_page_config(page_title="Novo Processo", page_icon="🆕", layout="wide")
-
 init_db()
 
 st.title("🆕 Novo Processo")

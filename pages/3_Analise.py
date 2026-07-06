@@ -12,8 +12,6 @@ from analise import (
     RECOMENDACAO_RESSALVAS,
 )
 
-st.set_page_config(page_title="Análise", page_icon="🔍", layout="wide")
-
 init_db()
 
 st.title("🔍 Análise")

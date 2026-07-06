@@ -3,8 +3,6 @@ import streamlit as st
 from database import init_db, listar_processos
 from minutas import gerar_minuta, avaliar_minuta, TIPOS_MINUTA
 
-st.set_page_config(page_title="Minuta", page_icon="📄", layout="wide")
-
 init_db()
 
 st.title("📄 Minuta")

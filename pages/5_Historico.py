@@ -4,8 +4,6 @@ import streamlit as st
 
 from database import init_db, listar_processos, listar_analises, listar_minutas
 
-st.set_page_config(page_title="Histórico", page_icon="🗂️", layout="wide")
-
 init_db()
 
 st.title("🗂️ Histórico")

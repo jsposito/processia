@@ -1,6 +1,6 @@
 # ProcessIA — Assistente de Instrução Processual com IA (protótipo)
 
-**Endpoint:** https://SUA-URL.streamlit.app
+**Endpoint:** https://processia-myw6wrxdektdqj6yfpfuyv.streamlit.app
 **Avaliação intermediária — IA Generativa (UniSENAI, Prof. Douglas)**
 
 ## O problema

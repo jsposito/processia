@@ -1,9 +1,16 @@
 """Testes mínimos: (a) modo mock funciona sem chave; (b) chamada trivial ao Groq responde."""
 import os
 
+from pydantic import BaseModel
+
 from seed import popular_banco_se_vazio
-from analise import analisar_processo, analisar_processo_llm, usar_llm
+from analise import analisar_processo, usar_llm
 from database import get_connection, init_db
+from llm_client import chamar_llm
+
+
+class _RespostaTeste(BaseModel):
+    resposta: str
 
 
 def _obter_processo_id_existente() -> int:
@@ -34,10 +41,13 @@ def test_chamada_trivial_groq():
         print("PULADO (b): GROQ_API_KEY não definida no .env.")
         return
 
-    processo_id = _obter_processo_id_existente()
-    resposta = analisar_processo_llm(processo_id)
-    assert isinstance(resposta, str) and resposta.strip()
-    print(f"OK (b): Groq respondeu: {resposta!r}")
+    resultado = chamar_llm(
+        system_prompt='Responda apenas em JSON no formato {"resposta": "..."}.',
+        user_prompt="Responda 'ok'.",
+        response_model=_RespostaTeste,
+    )
+    assert resultado.resposta.strip()
+    print(f"OK (b): Groq respondeu: {resultado.resposta!r}")
 
 
 if __name__ == "__main__":

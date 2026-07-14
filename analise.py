@@ -2,12 +2,16 @@
 import json
 import os
 from datetime import date
+from pathlib import Path
 
 from pydantic import BaseModel
 
 from database import get_connection, carregar_estado_checklist, buscar_processo
 from checklists import get_checklist, PRORROGACAO_CONTRATUAL, PAGAMENTO, FISCALIZACAO_CONTRATUAL
-from llm_client import chamar_llm
+from llm_client import chamar_agente
+from tools.definicoes import TOOLS_AGENTE_DOCUMENTAL
+
+PROMPT_AGENTE_DOCUMENTAL = (Path(__file__).parent / "prompts" / "agente_documental.txt").read_text(encoding="utf-8")
 
 RISCO_BAIXO = "Baixo"
 RISCO_MEDIO = "Médio"
@@ -199,10 +203,6 @@ def analisar_processo(processo_id: int) -> dict:
     return resultado
 
 
-class _RespostaTeste(BaseModel):
-    resposta: str
-
-
 def usar_llm() -> bool:
     """Indica se a análise via LLM real deve ser usada (PROCESSIA_MODO=llm e chave presente)."""
     if os.getenv("PROCESSIA_MODO", "mock").lower() != "llm":
@@ -210,14 +210,24 @@ def usar_llm() -> bool:
     return bool(os.getenv("GROQ_API_KEY"))
 
 
-def analisar_processo_llm(processo_id: int) -> str:
-    """Chamada trivial de teste ao LLM (placeholder; a análise real via LLM ainda não foi implementada)."""
-    processo = buscar_processo(processo_id)
-    identificacao = processo["numero"] if processo else str(processo_id)
+class RespostaAgenteDocumental(BaseModel):
+    criticos_pendentes: list[str]
+    complementares_pendentes: list[str]
+    observacao: str
 
-    resultado = chamar_llm(
-        system_prompt='Responda apenas em JSON no formato {"resposta": "..."}.',
-        user_prompt=f"Confirme que recebeu o processo nº {identificacao} respondendo 'ok'.",
-        response_model=_RespostaTeste,
+
+def analisar_processo_llm(processo_id: int) -> dict:
+    """Executa o Agente Documental via LLM com tool calling real.
+
+    O modelo recebe apenas o id do processo e deve descobrir os dados
+    cadastrais e o estado do checklist chamando as ferramentas disponíveis.
+    Por enquanto retorna somente o diagnóstico documental; os demais agentes
+    (risco, minuta) ainda não foram portados para LLM.
+    """
+    resultado = chamar_agente(
+        system_prompt=PROMPT_AGENTE_DOCUMENTAL,
+        user_prompt=f"Analise a situação documental do processo de id {processo_id}.",
+        tools=TOOLS_AGENTE_DOCUMENTAL,
+        response_model=RespostaAgenteDocumental,
     )
-    return resultado.resposta
+    return resultado.model_dump()

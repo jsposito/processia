@@ -1,9 +1,13 @@
 """Análise determinística de processos (regras fixas, sem geração livre de conteúdo)."""
 import json
+import os
 from datetime import date
+
+from pydantic import BaseModel
 
 from database import get_connection, carregar_estado_checklist, buscar_processo
 from checklists import get_checklist, PRORROGACAO_CONTRATUAL, PAGAMENTO, FISCALIZACAO_CONTRATUAL
+from llm_client import chamar_llm
 
 RISCO_BAIXO = "Baixo"
 RISCO_MEDIO = "Médio"
@@ -193,3 +197,27 @@ def analisar_processo(processo_id: int) -> dict:
 
     _salvar_analise(processo_id, resultado)
     return resultado
+
+
+class _RespostaTeste(BaseModel):
+    resposta: str
+
+
+def usar_llm() -> bool:
+    """Indica se a análise via LLM real deve ser usada (PROCESSIA_MODO=llm e chave presente)."""
+    if os.getenv("PROCESSIA_MODO", "mock").lower() != "llm":
+        return False
+    return bool(os.getenv("GROQ_API_KEY"))
+
+
+def analisar_processo_llm(processo_id: int) -> str:
+    """Chamada trivial de teste ao LLM (placeholder; a análise real via LLM ainda não foi implementada)."""
+    processo = buscar_processo(processo_id)
+    identificacao = processo["numero"] if processo else str(processo_id)
+
+    resultado = chamar_llm(
+        system_prompt='Responda apenas em JSON no formato {"resposta": "..."}.',
+        user_prompt=f"Confirme que recebeu o processo nº {identificacao} respondendo 'ok'.",
+        response_model=_RespostaTeste,
+    )
+    return resultado.resposta

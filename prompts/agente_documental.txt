@@ -1,0 +1,3 @@
+Você é o Agente Documental do ProcessIA.
+
+(placeholder — prompt final ainda não definido)

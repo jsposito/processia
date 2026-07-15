@@ -1,9 +1,16 @@
 """Geração determinística de minutas institucionais e avaliação simulada (LLM-as-a-judge)."""
 import json
+from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 from database import buscar_processo, buscar_ultima_analise, salvar_minuta
 from checklists import PAGAMENTO, PRORROGACAO_CONTRATUAL, FISCALIZACAO_CONTRATUAL
-from analise import RECOMENDACAO_DEVOLUCAO, RECOMENDACAO_RESSALVAS, RECOMENDACAO_APTO
+from analise import RECOMENDACAO_DEVOLUCAO, RECOMENDACAO_RESSALVAS, RECOMENDACAO_APTO, _pipeline_llm
+from llm_client import chamar_llm
+
+PROMPT_AVALIADOR_MINUTA = (Path(__file__).parent / "prompts" / "avaliador_minuta.txt").read_text(encoding="utf-8")
 
 DESPACHO = "Despacho"
 OFICIO = "Ofício"
@@ -144,6 +151,28 @@ def gerar_minuta(processo_id: int, tipo_minuta: str) -> dict:
     return {"texto": texto, "aviso": None}
 
 
+def gerar_minuta_llm(processo_id: int) -> dict:
+    """Executa o pipeline Documental -> Risco -> Minuta via LLM e retorna a minuta redigida.
+
+    Diferente de gerar_minuta (mock), não depende de uma análise salva previamente:
+    o pipeline roda por completo a cada chamada, salvando a análise (para uso por
+    avaliar_minuta_llm) e definindo o tipo_minuta (Despacho ou Ofício) de acordo com
+    a recomendação apurada, em vez de receber o tipo como parâmetro.
+
+    Retorna {"texto": str, "tipo_minuta": str, "aviso": None}, ou {"texto": None,
+    "tipo_minuta": None, "aviso": str} se o processo não existir.
+    """
+    processo = buscar_processo(processo_id)
+    if not processo:
+        return {"texto": None, "tipo_minuta": None, "aviso": "Processo não encontrado."}
+
+    _, resposta_minuta = _pipeline_llm(processo_id)
+
+    salvar_minuta(processo_id, resposta_minuta.tipo_minuta, resposta_minuta.texto_minuta)
+
+    return {"texto": resposta_minuta.texto_minuta, "tipo_minuta": resposta_minuta.tipo_minuta, "aviso": None}
+
+
 def _criterio_clareza(processo: dict) -> dict:
     if processo.get("objeto"):
         nota = 4
@@ -236,6 +265,52 @@ def avaliar_minuta(processo_id: int, texto: str) -> dict:
         _criterio_formalidade(),
     ]
 
+    media = sum(c["nota"] for c in criterios) / len(criterios)
+    selo = _SELOS_POR_NOTA[min(4, max(1, round(media)))]
+
+    return {"criterios": criterios, "media": media, "selo": selo}
+
+
+class _CriterioAvaliacaoLLM(BaseModel):
+    nome: str
+    nota: Literal[1, 2, 3, 4]
+    justificativa: str
+
+
+class _RespostaAvaliadorMinuta(BaseModel):
+    criterios: list[_CriterioAvaliacaoLLM] = Field(min_length=5, max_length=5)
+
+
+def avaliar_minuta_llm(processo_id: int, texto: str) -> dict:
+    """Avaliação da minuta via LLM-as-a-judge real (temperatura 0), sem uso de tools.
+
+    Recebe a minuta e as pendências/riscos da última análise salva do processo,
+    e retorna o mesmo formato de avaliar_minuta (mock): {"criterios", "media", "selo"}.
+    """
+    ultima_analise = buscar_ultima_analise(processo_id)
+    conteudo_analise = json.loads(ultima_analise["conteudo"])
+
+    criticos = conteudo_analise["documentos_faltantes"]["criticos"]
+    complementares = conteudo_analise["documentos_faltantes"]["complementares"]
+
+    user_prompt = (
+        f"Minuta a avaliar:\n{texto}\n\n"
+        f"Pendências críticas do processo: {criticos}\n"
+        f"Pendências complementares do processo: {complementares}\n"
+        f"Risco documental: {conteudo_analise['risco_documental']}\n"
+        f"Risco financeiro: {conteudo_analise['risco_financeiro']}\n"
+        f"Risco jurídico: {conteudo_analise['risco_juridico']}\n"
+        f"Recomendação: {conteudo_analise['recomendacao']}"
+    )
+
+    resposta = chamar_llm(
+        system_prompt=PROMPT_AVALIADOR_MINUTA,
+        user_prompt=user_prompt,
+        response_model=_RespostaAvaliadorMinuta,
+        temperatura=0,
+    )
+
+    criterios = [c.model_dump() for c in resposta.criterios]
     media = sum(c["nota"] for c in criterios) / len(criterios)
     selo = _SELOS_POR_NOTA[min(4, max(1, round(media)))]
 

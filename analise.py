@@ -273,13 +273,14 @@ def _etapa_agente_minuta_llm(processo_id: int, resposta: RespostaAgenteMinuta) -
     }
 
 
-def analisar_processo_llm(processo_id: int) -> dict:
+def _pipeline_llm(processo_id: int):
     """Executa o pipeline sequencial de agentes via LLM: Documental -> Risco -> Minuta.
 
     Cada agente recebe apenas o id do processo e o resultado dos agentes
     anteriores no user prompt, descobrindo os demais dados por conta própria
-    via tool calling real. O dict retornado usa as mesmas chaves do mock
-    (analisar_processo), para que as telas existentes funcionem sem alteração.
+    via tool calling real. Salva a análise (mesmo formato do mock) e retorna
+    (resultado, resposta_minuta), para reaproveitamento por analisar_processo_llm
+    e por gerar_minuta_llm (em minutas.py).
     """
     resposta_documental = chamar_agente(
         system_prompt=PROMPT_AGENTE_DOCUMENTAL,
@@ -333,4 +334,12 @@ def analisar_processo_llm(processo_id: int) -> dict:
     }
 
     _salvar_analise(processo_id, resultado)
+    return resultado, resposta_minuta
+
+
+def analisar_processo_llm(processo_id: int) -> dict:
+    """Executa o pipeline de agentes via LLM e retorna o resultado no formato do mock
+    (analisar_processo), para que as telas existentes funcionem sem alteração.
+    """
+    resultado, _ = _pipeline_llm(processo_id)
     return resultado

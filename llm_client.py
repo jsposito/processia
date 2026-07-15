@@ -37,7 +37,6 @@ def _criar_chat_completion(cliente: OpenAI, mensagens: list, **kwargs):
             return cliente.chat.completions.create(
                 model=MODELO,
                 messages=mensagens,
-                temperature=TEMPERATURA,
                 timeout=30,
                 **kwargs,
             )
@@ -49,13 +48,20 @@ def _criar_chat_completion(cliente: OpenAI, mensagens: list, **kwargs):
             raise TimeoutError("Tempo limite excedido ao chamar o LLM (Groq).") from erro
 
 
-def _chamar_com_backoff(cliente: OpenAI, mensagens: list) -> str:
+def _chamar_com_backoff(cliente: OpenAI, mensagens: list, temperatura: float) -> str:
     """Chama o LLM em modo JSON simples (sem tools) e retorna o texto da resposta."""
-    resposta = _criar_chat_completion(cliente, mensagens, response_format={"type": "json_object"})
+    resposta = _criar_chat_completion(
+        cliente, mensagens, temperature=temperatura, response_format={"type": "json_object"}
+    )
     return resposta.choices[0].message.content
 
 
-def chamar_llm(system_prompt: str, user_prompt: str, response_model: type[BaseModel]) -> BaseModel:
+def chamar_llm(
+    system_prompt: str,
+    user_prompt: str,
+    response_model: type[BaseModel],
+    temperatura: float = TEMPERATURA,
+) -> BaseModel:
     """Chama o LLM em modo JSON e valida a resposta contra response_model.
 
     Faz até MAX_RETRIES_JSON novas tentativas caso a resposta não seja um JSON
@@ -70,7 +76,7 @@ def chamar_llm(system_prompt: str, user_prompt: str, response_model: type[BaseMo
 
     ultimo_erro: Exception | None = None
     for _ in range(MAX_RETRIES_JSON + 1):
-        conteudo = _chamar_com_backoff(cliente, mensagens)
+        conteudo = _chamar_com_backoff(cliente, mensagens, temperatura)
         try:
             dados = json.loads(conteudo)
             return response_model.model_validate(dados)
@@ -139,7 +145,9 @@ def chamar_agente(system_prompt: str, user_prompt: str, tools: list, response_mo
 
     ultimo_erro: Exception | None = None
     for _ in range(MAX_ITERACOES_AGENTE):
-        resposta = _criar_chat_completion(cliente, mensagens, tools=schemas, tool_choice="auto")
+        resposta = _criar_chat_completion(
+            cliente, mensagens, temperature=TEMPERATURA, tools=schemas, tool_choice="auto"
+        )
         mensagem = resposta.choices[0].message
 
         if mensagem.tool_calls:

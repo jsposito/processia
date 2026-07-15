@@ -5,6 +5,8 @@ import streamlit as st
 from database import init_db, listar_processos
 from analise import (
     analisar_processo,
+    analisar_processo_llm,
+    usar_llm,
     RISCO_ALTO,
     RISCO_MEDIO,
     RISCO_BAIXO,
@@ -15,6 +17,11 @@ from analise import (
 init_db()
 
 st.title("🔍 Análise")
+
+if usar_llm():
+    st.info("Modo ativo: Análise via LLM (Groq/Llama 3.3 70B)")
+else:
+    st.caption("Modo ativo: Análise simulada")
 
 CORES_RISCO = {
     RISCO_ALTO: ("#dc3545", "#ffffff"),
@@ -50,7 +57,17 @@ else:
     processo_id = opcoes[escolha]
 
     if st.button("Executar análise"):
-        resultado = analisar_processo(processo_id)
+        if usar_llm():
+            try:
+                resultado = analisar_processo_llm(processo_id)
+            except Exception as erro:
+                st.warning(
+                    f"Falha ao executar a análise via LLM ({erro}). Exibindo o resultado da análise simulada."
+                )
+                resultado = analisar_processo(processo_id)
+        else:
+            resultado = analisar_processo(processo_id)
+
         st.session_state["analises_por_processo"][processo_id] = resultado
 
         st.subheader("Processamento dos agentes")

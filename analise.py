@@ -3,15 +3,19 @@ import json
 import os
 from datetime import date
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel
 
 from database import get_connection, carregar_estado_checklist, buscar_processo
 from checklists import get_checklist, PRORROGACAO_CONTRATUAL, PAGAMENTO, FISCALIZACAO_CONTRATUAL
 from llm_client import chamar_agente
-from tools.definicoes import TOOLS_AGENTE_DOCUMENTAL
+from tools.definicoes import TOOLS_AGENTE_DOCUMENTAL, TOOLS_AGENTE_RISCO, TOOLS_AGENTE_MINUTA
 
-PROMPT_AGENTE_DOCUMENTAL = (Path(__file__).parent / "prompts" / "agente_documental.txt").read_text(encoding="utf-8")
+_PASTA_PROMPTS = Path(__file__).parent / "prompts"
+PROMPT_AGENTE_DOCUMENTAL = (_PASTA_PROMPTS / "agente_documental.txt").read_text(encoding="utf-8")
+PROMPT_AGENTE_RISCO = (_PASTA_PROMPTS / "agente_risco.txt").read_text(encoding="utf-8")
+PROMPT_AGENTE_MINUTA = (_PASTA_PROMPTS / "agente_minuta.txt").read_text(encoding="utf-8")
 
 RISCO_BAIXO = "Baixo"
 RISCO_MEDIO = "Médio"
@@ -216,18 +220,117 @@ class RespostaAgenteDocumental(BaseModel):
     observacao: str
 
 
-def analisar_processo_llm(processo_id: int) -> dict:
-    """Executa o Agente Documental via LLM com tool calling real.
+class RespostaAgenteRisco(BaseModel):
+    risco_documental: Literal[RISCO_BAIXO, RISCO_MEDIO, RISCO_ALTO]
+    risco_financeiro: Literal[RISCO_BAIXO, RISCO_MEDIO, RISCO_ALTO]
+    risco_juridico: Literal[RISCO_BAIXO, RISCO_MEDIO, RISCO_ALTO]
+    recomendacao: Literal[RECOMENDACAO_DEVOLUCAO, RECOMENDACAO_RESSALVAS, RECOMENDACAO_APTO]
+    justificativa: str
 
-    O modelo recebe apenas o id do processo e deve descobrir os dados
-    cadastrais e o estado do checklist chamando as ferramentas disponíveis.
-    Por enquanto retorna somente o diagnóstico documental; os demais agentes
-    (risco, minuta) ainda não foram portados para LLM.
+
+class RespostaAgenteMinuta(BaseModel):
+    tipo_minuta: Literal["Despacho", "Ofício"]
+    texto_minuta: str
+
+
+def _etapa_agente_documental_llm(processo_id: int, resposta: RespostaAgenteDocumental) -> dict:
+    return {
+        "agente": "Agente Documental",
+        "thought": (
+            f"Preciso descobrir os dados cadastrais e o checklist do processo de id {processo_id} "
+            "para identificar eventuais pendências documentais."
+        ),
+        "action": "Chamar as ferramentas consultar_processo e verificar_checklist.",
+        "observation": resposta.observacao,
+    }
+
+
+def _etapa_agente_risco_llm(processo_id: int, resposta: RespostaAgenteRisco) -> dict:
+    return {
+        "agente": "Agente de Risco",
+        "thought": (
+            f"Com base nas pendências apuradas pelo Agente Documental, preciso classificar os riscos "
+            f"documental, financeiro e jurídico do processo de id {processo_id}."
+        ),
+        "action": "Consultar os dados do processo e o prazo de vigência, e aplicar as regras de classificação de risco.",
+        "observation": (
+            f"Risco documental: {resposta.risco_documental}. "
+            f"Risco financeiro: {resposta.risco_financeiro}. "
+            f"Risco jurídico: {resposta.risco_juridico}. {resposta.justificativa}"
+        ),
+    }
+
+
+def _etapa_agente_minuta_llm(processo_id: int, resposta: RespostaAgenteMinuta) -> dict:
+    return {
+        "agente": "Agente de Minuta",
+        "thought": (
+            f"Considerando a recomendação apurada pelo Agente de Risco, preciso redigir a minuta "
+            f"institucional do processo de id {processo_id}."
+        ),
+        "action": "Consultar a fundamentação legal aplicável ao tipo do processo e redigir a minuta.",
+        "observation": f"Minuta ({resposta.tipo_minuta}) redigida:\n\n{resposta.texto_minuta}",
+    }
+
+
+def analisar_processo_llm(processo_id: int) -> dict:
+    """Executa o pipeline sequencial de agentes via LLM: Documental -> Risco -> Minuta.
+
+    Cada agente recebe apenas o id do processo e o resultado dos agentes
+    anteriores no user prompt, descobrindo os demais dados por conta própria
+    via tool calling real. O dict retornado usa as mesmas chaves do mock
+    (analisar_processo), para que as telas existentes funcionem sem alteração.
     """
-    resultado = chamar_agente(
+    resposta_documental = chamar_agente(
         system_prompt=PROMPT_AGENTE_DOCUMENTAL,
         user_prompt=f"Analise a situação documental do processo de id {processo_id}.",
         tools=TOOLS_AGENTE_DOCUMENTAL,
         response_model=RespostaAgenteDocumental,
     )
-    return resultado.model_dump()
+
+    resposta_risco = chamar_agente(
+        system_prompt=PROMPT_AGENTE_RISCO,
+        user_prompt=(
+            f"Classifique os riscos do processo de id {processo_id}.\n"
+            f"Pendências críticas apuradas pelo Agente Documental: {resposta_documental.criticos_pendentes}\n"
+            f"Pendências complementares apuradas pelo Agente Documental: {resposta_documental.complementares_pendentes}"
+        ),
+        tools=TOOLS_AGENTE_RISCO,
+        response_model=RespostaAgenteRisco,
+    )
+
+    resposta_minuta = chamar_agente(
+        system_prompt=PROMPT_AGENTE_MINUTA,
+        user_prompt=(
+            f"Redija a minuta do processo de id {processo_id}.\n"
+            f"Pendências críticas: {resposta_documental.criticos_pendentes}\n"
+            f"Pendências complementares: {resposta_documental.complementares_pendentes}\n"
+            f"Risco documental: {resposta_risco.risco_documental}\n"
+            f"Risco financeiro: {resposta_risco.risco_financeiro}\n"
+            f"Risco jurídico: {resposta_risco.risco_juridico}\n"
+            f"Recomendação: {resposta_risco.recomendacao}"
+        ),
+        tools=TOOLS_AGENTE_MINUTA,
+        response_model=RespostaAgenteMinuta,
+    )
+
+    etapas_react = [
+        _etapa_agente_documental_llm(processo_id, resposta_documental),
+        _etapa_agente_risco_llm(processo_id, resposta_risco),
+        _etapa_agente_minuta_llm(processo_id, resposta_minuta),
+    ]
+
+    resultado = {
+        "documentos_faltantes": {
+            "criticos": resposta_documental.criticos_pendentes,
+            "complementares": resposta_documental.complementares_pendentes,
+        },
+        "risco_documental": resposta_risco.risco_documental,
+        "risco_financeiro": resposta_risco.risco_financeiro,
+        "risco_juridico": resposta_risco.risco_juridico,
+        "recomendacao": resposta_risco.recomendacao,
+        "etapas_react": etapas_react,
+    }
+
+    _salvar_analise(processo_id, resultado)
+    return resultado

@@ -8,7 +8,9 @@ load_dotenv(encoding="utf-8-sig")
 from database import init_db, get_connection, carregar_estado_checklist
 from checklists import get_checklist
 from seed import popular_banco_se_vazio
-from analise import analisar_processo_llm
+from llm_client import chamar_agente
+from tools.definicoes import TOOLS_AGENTE_DOCUMENTAL
+from analise import PROMPT_AGENTE_DOCUMENTAL, RespostaAgenteDocumental
 
 
 def _achar_processo_com_pendencias_criticas():
@@ -37,14 +39,19 @@ def test_agente_documental_identifica_pendencias_criticas():
     processo_id, criticos_esperados = _achar_processo_com_pendencias_criticas()
     print(f"Processo de teste: id={processo_id}, críticos pendentes esperados={criticos_esperados}")
 
-    resultado = analisar_processo_llm(processo_id)
+    resultado = chamar_agente(
+        system_prompt=PROMPT_AGENTE_DOCUMENTAL,
+        user_prompt=f"Analise a situação documental do processo de id {processo_id}.",
+        tools=TOOLS_AGENTE_DOCUMENTAL,
+        response_model=RespostaAgenteDocumental,
+    )
 
     print(f"Resultado do Agente Documental: {resultado}")
 
-    assert set(resultado["criticos_pendentes"]) == set(criticos_esperados), (
-        f"Divergência nas pendências críticas.\nEsperado: {criticos_esperados}\nRecebido: {resultado['criticos_pendentes']}"
+    assert set(resultado.criticos_pendentes) == set(criticos_esperados), (
+        f"Divergência nas pendências críticas.\nEsperado: {criticos_esperados}\nRecebido: {resultado.criticos_pendentes}"
     )
-    assert resultado["observacao"].strip()
+    assert resultado.observacao.strip()
     print("OK: Agente Documental via LLM (com tool calling) identificou corretamente as pendências críticas.")
 
 

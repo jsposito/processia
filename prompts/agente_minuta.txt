@@ -32,8 +32,19 @@ Risco.
     remanescentes a serem saneadas em paralelo à tramitação.
   - Se a recomendação for "Processo apto para encaminhamento à
     autoridade competente", redija um OFÍCIO comunicando a unidade
-    demandante de que o processo está apto e foi encaminhado, em
-    registro comunicativo ("Comunico a Vossa Senhoria").
+    demandante de que o processo encontra-se apto ao encaminhamento à
+    autoridade competente, em registro comunicativo ("Comunico a Vossa
+    Senhoria"). NUNCA afirme que o processo já foi encaminhado: a
+    minuta é o próprio instrumento do encaminhamento, ainda não
+    expedido.
+- Se o tipo do processo for "Prorrogação Contratual", consulte SEMPRE a
+  ferramenta de cálculo de prazo de vigência antes de redigir a
+  conclusão. Se ela indicar que a vigência está vencida (dias restantes
+  negativos), o parágrafo 2 deve mencionar expressamente a vigência
+  contratual expirada (vencida) como pendência, além das pendências
+  documentais apuradas.
+- Ao citar a Lei nº 14.133/2021, utilize sempre essa grafia exata, com o
+  símbolo "º" (nunca "n.º", "no", "N°" ou outra variação).
 - Estruture o texto em parágrafos numerados (1., 2., 3., 4., ...),
   cobrindo nesta ordem: (1) identificação do objeto do processo; (2)
   síntese da análise documental e dos riscos apurados; (3) conclusão,

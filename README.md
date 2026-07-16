@@ -121,6 +121,9 @@ Limitações conhecidas mantidas por decisão de escopo: sem tela de edição de
 - `pages/3_Analise.py` e `pages/4_Minuta.py` — integração às telas com fallback automático
 - `PROMPTS.md` — histórico das iterações de prompt, incluindo os erros
 
+## Arquitetura geral e o pipeline de agentes. Primeiro, como as camadas se conectam:
+<img width="1440" height="1040" alt="image" src="https://github.com/user-attachments/assets/e8030029-fff1-42f1-856c-0b99aa69e02e" />
+
 ## Registro de prompts
 
 O arquivo `PROMPTS.md` documenta os prompts usados ao longo do projeto e o resultado de cada um.

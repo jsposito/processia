@@ -22,3 +22,19 @@ Resultado: estrutura correta, mas o texto exigiu revisão de domínio: concordâ
 ## Prompt 6 — Dashboard, seed e navegação
 Prompt: métricas, gráficos, tabela colorida; seed idempotente com 9 processos fictícios chamado automaticamente se banco vazio (necessário porque o Streamlit Cloud não persiste o .db); correção dos nomes do menu via st.navigation.
 Resultado: funcionou de primeira, incluindo adição espontânea de pandas ao requirements.txt. Verificou a versão do pandas antes de escolher API do Styler.
+# FASE 2 — Integração LLM
+
+## Prompt 7 — Cliente Groq e modo dual
+Resultado: gerou de primeira. Descoberta do agente: o .env criado pelo PowerShell tinha BOM UTF-8 que quebrava a leitura da chave silenciosamente; resolvido com encoding utf-8-sig no leitor, sem tocar no arquivo. Também construiu comando que lê o .env sem expor valores.
+
+## Prompt 8 — Agente Documental com tool calling
+Resultado: Llama 3.3 70B chamou consultar_processo e verificar_checklist por decisão própria; pendências retornadas idênticas ao banco.
+
+## Prompt 9 — Agentes de Risco e Minuta
+Resultado: pipeline completo coincidiu com o mock nos dois extremos (Alto/devolução e Baixo/apto). BUG REAL: o agente de minuta chamou buscar_fundamentacao_legal com tipo 'Pagamento' num processo de Prorrogação, mesmo tendo o tipo correto no contexto — limitação de instruction following do modelo aberto. Corrigido com restrição explícita no prompt; o modelo passou a se autocorrigir no loop.
+
+## Prompt 10 — Refinamento da minuta (2 rodadas)
+Primeira rodada de minutas tinha: ofício afirmando encaminhamento já ocorrido, vigência vencida omitida, "no" sem º. Corrigido editando só o .txt do prompt — nenhuma linha de código alterada. Uma das iterações foi feita manualmente durante indisponibilidade do agente, provando a vantagem de prompts em arquivos.
+
+## Prompt 11 — Avaliador LLM e integração às telas
+Resultado: fallback provado duas vezes — com chave inválida (sintético) e com rate limit real do Groq (100k tokens/dia esgotados pelos testes). O erro real na tela com fallback funcionando é a melhor evidência de que a integração é genuína.

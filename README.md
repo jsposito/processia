@@ -112,6 +112,15 @@ Do trabalho com o agente de codificação nessa fase, destacaram-se acertos espo
 
 Limitações conhecidas mantidas por decisão de escopo: sem tela de edição de processo, sem autenticação, sem upload de documentos. O próximo passo definido ao final da fase 1 — substituir os mocks por LLM real com structured outputs, tool calling e prompts por agente — é exatamente o que esta fase implementou.
 
+## Mapa do repositório
+- `prompts/` — system prompts dos 3 agentes e do avaliador (um arquivo por agente)
+- `tools/definicoes.py` — as 4 ferramentas (schema + implementação)
+- `llm_client.py` — cliente Groq, loop de tool calling (máx. 5 iterações), structured output com Pydantic e retries
+- `analise.py` — pipeline sequencial Documental → Risco → Minuta e seletor mock/llm
+- `minutas.py` — geração e avaliação de minuta (LLM-as-a-judge) nos dois modos
+- `pages/3_Analise.py` e `pages/4_Minuta.py` — integração às telas com fallback automático
+- `PROMPTS.md` — histórico das iterações de prompt, incluindo os erros
+
 ## Registro de prompts
 
 O arquivo `PROMPTS.md` documenta os prompts usados ao longo do projeto e o resultado de cada um.
